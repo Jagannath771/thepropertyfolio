@@ -102,6 +102,11 @@ export default function AvailabilityClient() {
     if (filters.bedrooms && p.bedrooms < filters.bedrooms) return false;
     if (filters.amenities.length > 0 && !filters.amenities.every((a) => p.amenities.includes(a))) return false;
     return true;
+  }).sort((a, b) => {
+    if (filters.sortBy === "price_asc") return a.monthly_rent - b.monthly_rent;
+    if (filters.sortBy === "price_desc") return b.monthly_rent - a.monthly_rent;
+    // "newest" — sort by id descending (highest id = newest)
+    return Number(b.id) - Number(a.id);
   });
 
   return (

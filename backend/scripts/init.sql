@@ -1,0 +1,1 @@
+CREATE DATABASE thepropertyfolio_test;

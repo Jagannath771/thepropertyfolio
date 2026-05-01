@@ -1,0 +1,48 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    name: Deploy to AWS Lightsail
+    runs-on: ubuntu-latest
+    # Only runs after all CI checks pass
+    needs: []  # Remove this line if you want to gate on CI jobs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: 22
+          # Timeout for the entire deploy (10 min covers slow Docker builds)
+          command_timeout: 10m
+          script: |
+            set -e
+
+            echo "📦 Pulling latest code..."
+            cd /home/ubuntu/thepropertyfolio
+            git pull origin main
+
+            echo "🐳 Building and restarting containers..."
+            docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
+
+            echo "⏳ Waiting for backend to be healthy..."
+            sleep 20
+
+            echo "🗄️ Running database migrations..."
+            docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+
+            echo "🧹 Cleaning up unused Docker images..."
+            docker image prune -f
+
+            echo "✅ Deployment complete!"
+            docker compose -f docker-compose.prod.yml ps

@@ -4,10 +4,10 @@ overview: Deliver ThePropertyFolio as a MAANG-grade, fully live property platfor
 todos:
   - id: pr1_public_catalog
     content: "PR 1: Wire availability/[id], AvailabilityClient, and FeaturedProperties to GET /api/properties; remove all MOCK_PROPERTIES/PLACEHOLDER_PROPERTIES arrays; add empty state; update Playwright."
-    status: pending
+    status: completed
   - id: pr2_owner_listing_s3
     content: "PR 2: New /owners/dashboard/properties/new form + S3 presigned-PUT image upload pipeline; wire owner dashboard PropertiesTab to /api/owners/portfolio; add Playwright E2E for full owner-post-a-listing flow."
-    status: pending
+    status: in_progress
   - id: pr3_owner_dashboard_live
     content: "PR 3: Live owner dashboard — Applications (approve/reject), Financials (new endpoint), Maintenance, Settings, KPI period-over-period calculations."
     status: pending

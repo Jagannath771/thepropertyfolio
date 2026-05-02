@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Available Rental Properties | ThePropertyFolio",
     description: "Browse available homes, apartments, and commercial spaces.",
-    images: ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80"],
+    images: ["/og-availability.png"],
   },
 };
 

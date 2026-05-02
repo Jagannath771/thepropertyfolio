@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import {
   LayoutDashboard, Building2, FileText, BarChart3, Wrench, MessageSquare, Settings,
-  TrendingUp, Users, DollarSign, AlertTriangle, ChevronRight, PlusCircle, Menu, Bell, Loader2
+  TrendingUp, Users, DollarSign, AlertTriangle, ChevronRight, PlusCircle, Menu, Bell, Loader2,
+  Pencil, Archive, Home as HomeIcon, ImageOff
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+
+import { authHeader } from "@/lib/auth-client";
+import { archiveProperty, listOwnerProperties } from "@/lib/owner-properties";
+import type { Property } from "@/lib/types";
 
 const SIDEBAR_ITEMS = [
   { icon: LayoutDashboard, label: "Overview", id: "overview" },
@@ -71,40 +77,214 @@ function OverviewTab({ kpis, loading }: { kpis: any, loading: boolean }) {
   );
 }
 
+function statusPillClass(status: string): string {
+  switch (status) {
+    case "leased":
+      return "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+    case "available":
+      return "bg-primary/20 text-primary border border-primary/30";
+    case "coming_soon":
+      return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
+    case "archived":
+      return "bg-white/10 text-foreground-muted border border-white/10";
+    default:
+      return "bg-white/10 text-foreground-secondary border border-white/10";
+  }
+}
+
+function PropertyThumbnail({ images, title }: { images: string[]; title: string }) {
+  if (images.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-white/5">
+        <div className="text-center">
+          <ImageOff className="w-6 h-6 text-foreground-muted mx-auto mb-1" />
+          <p className="text-xs text-foreground-muted">No photo yet</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={images[0]}
+      alt={title}
+      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+    />
+  );
+}
+
 function PropertiesTab() {
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    listOwnerProperties(includeArchived)
+      .then((res) => {
+        if (!cancelled) setProperties(res.items);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message || "Failed to load your properties.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [includeArchived, reloadKey]);
+
+  const onArchive = useCallback(async (id: string, title: string) => {
+    if (!window.confirm(`Archive "${title}"? Tenants will no longer see this listing.`)) {
+      return;
+    }
+    setArchivingId(id);
+    try {
+      await archiveProperty(id);
+      toast.success(`Archived "${title}".`);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to archive.");
+    } finally {
+      setArchivingId(null);
+    }
+  }, []);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-foreground" style={{ fontFamily: "var(--font-playfair)" }}>My Properties</h2>
-        <button className="btn-primary py-2 px-4 text-sm font-semibold flex items-center gap-2">
-          <PlusCircle className="w-4 h-4" /> Add Property
-        </button>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2
+          className="text-2xl font-bold text-foreground"
+          style={{ fontFamily: "var(--font-playfair)" }}
+        >
+          My Properties
+        </h2>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-foreground-muted">
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(e) => setIncludeArchived(e.target.checked)}
+              className="accent-primary"
+            />
+            Include archived
+          </label>
+          <Link
+            href="/owners/dashboard/properties/new"
+            className="btn-primary py-2 px-4 text-sm font-semibold flex items-center gap-2"
+            data-testid="add-property-btn"
+          >
+            <PlusCircle className="w-4 h-4" /> Add Property
+          </Link>
+        </div>
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[
-          { title: "400 Market St #4B", type: "Apartment", units: 1, status: "Occupied", revenue: "$2,400", img: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=600&q=80" },
-          { title: "1820 Laurel Canyon", type: "Single Family", units: 1, status: "Occupied", revenue: "$4,500", img: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80" },
-          { title: "400 Market St #2A", type: "Apartment", units: 1, status: "Vacant", revenue: "$0", img: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80" },
-        ].map((p, i) => (
-          <div key={i} className="glass-card overflow-hidden group cursor-pointer">
-            <div className="h-40 bg-white/5 relative overflow-hidden">
-              <img src={p.img} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-              <span className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                p.status === "Occupied" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-              }`}>{p.status}</span>
-            </div>
-            <div className="p-4">
-              <h3 className="font-bold text-foreground mb-1">{p.title}</h3>
-              <p className="text-xs text-foreground-muted mb-3">{p.type} · {p.units} Unit</p>
-              <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                <span className="text-xs text-foreground-secondary">Monthly Revenue</span>
-                <span className="text-sm font-bold text-primary">{p.revenue}</span>
+
+      {error && (
+        <div className="glass-card border border-danger/30 p-5 text-sm text-foreground">
+          <AlertTriangle className="w-4 h-4 inline mr-2 text-danger" />
+          {error}
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="ml-3 text-primary hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="glass-card overflow-hidden animate-pulse" aria-hidden>
+              <div className="h-40 bg-white/5" />
+              <div className="p-4 space-y-3">
+                <div className="h-4 w-2/3 bg-white/5 rounded" />
+                <div className="h-3 w-1/2 bg-white/5 rounded" />
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : properties.length === 0 ? (
+        <div className="glass-card p-12 text-center">
+          <HomeIcon className="w-10 h-10 text-primary mx-auto mb-4 opacity-70" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">
+            No properties yet
+          </h3>
+          <p className="text-sm text-foreground-muted mb-6 max-w-md mx-auto">
+            Add your first listing and it will appear on the public availability
+            page within seconds.
+          </p>
+          <Link
+            href="/owners/dashboard/properties/new"
+            className="btn-primary inline-flex"
+          >
+            <PlusCircle className="w-4 h-4" /> List your first property
+          </Link>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="owner-properties-grid">
+          {properties.map((p) => (
+            <div
+              key={p.id}
+              className="glass-card overflow-hidden group"
+              data-testid="owner-property-card"
+            >
+              <div className="h-40 bg-white/5 relative overflow-hidden">
+                <PropertyThumbnail images={p.images} title={p.title} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                <span
+                  className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${statusPillClass(p.status)}`}
+                >
+                  {p.status.replace("_", " ")}
+                </span>
+              </div>
+              <div className="p-4">
+                <h3 className="font-bold text-foreground mb-1 truncate">{p.title}</h3>
+                <p className="text-xs text-foreground-muted mb-3">
+                  {p.property_type ? p.property_type.charAt(0).toUpperCase() + p.property_type.slice(1) : "Listing"}
+                  {p.city ? ` · ${p.city}${p.state ? `, ${p.state}` : ""}` : ""}
+                </p>
+                <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                  <span className="text-xs text-foreground-secondary">Monthly rent</span>
+                  <span className="text-sm font-bold text-primary">
+                    {p.monthly_rent ? `$${p.monthly_rent.toLocaleString()}` : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-4">
+                  <Link
+                    href={`/availability/${p.id}`}
+                    className="text-xs text-foreground-secondary hover:text-foreground inline-flex items-center gap-1"
+                  >
+                    View public page <ChevronRight className="w-3 h-3" />
+                  </Link>
+                  <div className="flex-1" />
+                  {p.status !== "archived" && (
+                    <button
+                      type="button"
+                      onClick={() => onArchive(p.id, p.title)}
+                      disabled={archivingId === p.id}
+                      className="text-xs text-foreground-muted hover:text-danger inline-flex items-center gap-1 disabled:opacity-50"
+                      aria-label={`Archive ${p.title}`}
+                    >
+                      {archivingId === p.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Archive className="w-3 h-3" />
+                      )}
+                      Archive
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -378,9 +558,12 @@ export default function OwnerDashboardPage() {
           ))}
         </div>
         <div className="p-4 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-          <button className="btn-primary w-full justify-center py-2.5 text-sm">
+          <Link
+            href="/owners/dashboard/properties/new"
+            className="btn-primary w-full justify-center py-2.5 text-sm"
+          >
             <PlusCircle className="w-4 h-4" />Add Property
-          </button>
+          </Link>
         </div>
       </aside>
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />}

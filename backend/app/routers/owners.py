@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,38 @@ from app.models.property import Property
 from app.models.user import User
 
 router = APIRouter()
+
+
+def _property_to_dict(p: Property) -> dict[str, Any]:
+    """Serialize a Property ORM object. Duplicated intentionally to avoid a
+    circular import from `app.routers.properties`."""
+    return {
+        "id": str(p.id),
+        "owner_id": str(p.owner_id),
+        "title": p.title,
+        "description": p.description,
+        "address": p.address,
+        "city": p.city,
+        "state": p.state,
+        "zip_code": p.zip_code,
+        "latitude": p.latitude,
+        "longitude": p.longitude,
+        "property_type": p.property_type,
+        "bedrooms": p.bedrooms,
+        "bathrooms": float(p.bathrooms) if p.bathrooms else None,
+        "square_feet": p.square_feet,
+        "monthly_rent": float(p.monthly_rent) if p.monthly_rent else None,
+        "deposit": float(p.deposit) if p.deposit else None,
+        "available_date": p.available_date.isoformat() if p.available_date else None,
+        "status": p.status,
+        "amenities": p.amenities or [],
+        "pet_policy": p.pet_policy,
+        "images": p.images or [],
+        "is_featured": p.is_featured,
+        "view_count": p.view_count,
+        "created_at": p.created_at.isoformat(),
+        "updated_at": p.updated_at.isoformat(),
+    }
 
 
 @router.get("/me")
@@ -72,4 +104,28 @@ async def get_portfolio_kpis(
         "monthly_revenue": monthly_revenue,
         "open_maintenance_tickets": open_tickets,
         "available_units": sum(1 for p in properties if p.status == "available"),
+    }
+
+
+@router.get("/properties")
+async def list_owner_properties(
+    current_user: Annotated[User, Depends(require_owner)],
+    db: AsyncSession = Depends(get_db),
+    include_archived: bool = Query(
+        default=False,
+        description="If true, include archived listings in the response.",
+    ),
+) -> dict[str, Any]:
+    """Return the current owner's full property catalog (scoped by owner_id)."""
+    query = select(Property).where(Property.owner_id == current_user.id)
+    if not include_archived:
+        query = query.where(Property.status != "archived")
+    query = query.order_by(Property.created_at.desc())
+
+    result = await db.execute(query)
+    properties = result.scalars().all()
+
+    return {
+        "items": [_property_to_dict(p) for p in properties],
+        "total": len(properties),
     }

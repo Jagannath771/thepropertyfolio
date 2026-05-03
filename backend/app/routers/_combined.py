@@ -17,6 +17,7 @@ from app.database import get_db
 from app.middleware.auth_middleware import get_current_verified_user, require_tenant, require_owner
 from app.models.maintenance import MaintenanceRequest
 from app.models.payment import Payment
+from app.models.property import Property
 from app.models.message import Message
 from app.models.chat_history import ChatHistory
 from app.models.user import User
@@ -80,15 +81,39 @@ async def submit_maintenance(
     return _maint_to_dict(req)
 
 
+async def _owner_property_ids(db: AsyncSession, owner_id: uuid.UUID) -> list[uuid.UUID]:
+    """Return the UUIDs of properties owned by this user. Used to scope
+    GET lists for owners so they never see tenants' rows for other owners."""
+    result = await db.execute(
+        select(Property.id).where(Property.owner_id == owner_id)
+    )
+    return [row[0] for row in result.all()]
+
+
 @maintenance_router.get("")
 async def list_maintenance(
     current_user: Annotated[User, Depends(get_current_verified_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     if current_user.role == "tenant":
-        result = await db.execute(select(MaintenanceRequest).where(MaintenanceRequest.tenant_id == current_user.id).order_by(MaintenanceRequest.created_at.desc()))
+        result = await db.execute(
+            select(MaintenanceRequest)
+            .where(MaintenanceRequest.tenant_id == current_user.id)
+            .order_by(MaintenanceRequest.created_at.desc())
+        )
+    elif current_user.role == "owner":
+        prop_ids = await _owner_property_ids(db, current_user.id)
+        if not prop_ids:
+            return []
+        result = await db.execute(
+            select(MaintenanceRequest)
+            .where(MaintenanceRequest.property_id.in_(prop_ids))
+            .order_by(MaintenanceRequest.created_at.desc())
+        )
     else:
-        result = await db.execute(select(MaintenanceRequest).order_by(MaintenanceRequest.created_at.desc()))
+        result = await db.execute(
+            select(MaintenanceRequest).order_by(MaintenanceRequest.created_at.desc())
+        )
     return [_maint_to_dict(m) for m in result.scalars().all()]
 
 
@@ -104,6 +129,24 @@ async def update_maintenance(
     if not req:
         raise HTTPException(status_code=404, detail="Maintenance request not found.")
 
+    # Enforce ownership: the maintenance request must be on a property this
+    # owner controls (admins bypass).
+    if current_user.role != "admin":
+        if req.property_id is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Maintenance request is not tied to a property you own.",
+            )
+        prop_res = await db.execute(
+            select(Property).where(Property.id == req.property_id)
+        )
+        prop = prop_res.scalar_one_or_none()
+        if not prop or prop.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="You don't own the property tied to this maintenance request.",
+            )
+
     if body.status:
         req.status = body.status
         if body.status in ("resolved", "closed"):
@@ -113,6 +156,12 @@ async def update_maintenance(
     if body.resolution_notes:
         req.resolution_notes = body.resolution_notes
     await db.flush()
+    await audit_service.log_event(
+        db, f"maintenance.{body.status or 'updated'}",
+        user_id=current_user.id,
+        resource_type="maintenance",
+        resource_id=req.id,
+    )
     return _maint_to_dict(req)
 
 
@@ -148,9 +197,24 @@ async def list_payments(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     if current_user.role == "tenant":
-        result = await db.execute(select(Payment).where(Payment.tenant_id == current_user.id).order_by(Payment.created_at.desc()))
+        result = await db.execute(
+            select(Payment)
+            .where(Payment.tenant_id == current_user.id)
+            .order_by(Payment.created_at.desc())
+        )
+    elif current_user.role == "owner":
+        prop_ids = await _owner_property_ids(db, current_user.id)
+        if not prop_ids:
+            return []
+        result = await db.execute(
+            select(Payment)
+            .where(Payment.property_id.in_(prop_ids))
+            .order_by(Payment.created_at.desc())
+        )
     else:
-        result = await db.execute(select(Payment).order_by(Payment.created_at.desc()))
+        result = await db.execute(
+            select(Payment).order_by(Payment.created_at.desc())
+        )
     return [_payment_to_dict(p) for p in result.scalars().all()]
 
 

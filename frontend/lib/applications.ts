@@ -3,8 +3,8 @@
  * Backend: `backend/app/routers/applications.py`
  */
 
-import { apiFetch } from "./api";
-import { authHeader } from "./auth-client";
+import { API_BASE_URL, apiFetch } from "./api";
+import { authHeader, getAccessToken } from "./auth-client";
 
 export type ApplicationStatus =
   | "pending"
@@ -36,6 +36,18 @@ export async function listApplications(): Promise<Application[]> {
     headers: authHeader(),
     cache: "no-store",
   });
+}
+
+/**
+ * Absolute URL for `EventSource` (cannot send Authorization header).
+ * Returns null if the user is not signed in on this device.
+ */
+export function getApplicationsStreamUrl(): string | null {
+  const token = getAccessToken();
+  if (!token) return null;
+  const u = new URL(`${API_BASE_URL}/api/applications/stream`);
+  u.searchParams.set("access_token", token);
+  return u.toString();
 }
 
 export async function updateApplicationStatus(

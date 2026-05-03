@@ -88,3 +88,19 @@ def get_content_type(filename: str) -> str:
     """Guess MIME type from filename, defaulting to image/jpeg."""
     content_type, _ = mimetypes.guess_type(filename)
     return content_type or "image/jpeg"
+
+
+def s3_credentials_configured() -> bool:
+    return bool(settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY)
+
+
+def generate_presigned_get_url(object_key: str, expires_in: int = 3600) -> str:
+    """Presigned GET for private objects (tenant documents, etc.)."""
+    if not s3_credentials_configured():
+        raise ValueError("S3 credentials are not configured")
+    client = _get_s3_client()
+    return client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.AWS_S3_BUCKET, "Key": object_key},
+        ExpiresIn=expires_in,
+    )

@@ -3,7 +3,7 @@
  * Backend: `backend/app/routers/properties.py`
  */
 
-import { apiFetch, toQuery } from "./api";
+import { ApiError, apiFetch, toQuery } from "./api";
 import type {
   Property,
   PropertyListParams,
@@ -63,6 +63,16 @@ export async function getProperty(
     ) {
       return null;
     }
+    throw err;
+  }
+}
+
+/** Browser / client-only fetch (no Next.js data cache). */
+export async function getPropertyClient(id: string): Promise<Property | null> {
+  try {
+    return await apiFetch<Property>(`/api/properties/${id}`, { cache: "no-store" });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
     throw err;
   }
 }

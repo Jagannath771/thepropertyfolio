@@ -10,10 +10,10 @@ todos:
     status: completed
   - id: pr3_owner_dashboard_live
     content: "PR 3: Live owner dashboard — Applications (approve/reject), Financials (new endpoint), Maintenance, Settings, KPI period-over-period calculations."
-    status: in_progress
+    status: completed
   - id: pr4_tenant_dashboard_sse
     content: "PR 4: Live tenant dashboard — Applications + SSE /api/applications/stream for instant approval updates, Payments, Maintenance submit, Documents, Messages."
-    status: pending
+    status: in_progress
   - id: pr5_auth_scoping
     content: "PR 5: Fix every scoping bug in applications/payments/maintenance routers; HttpOnly cookie for access_token; frontend middleware validates JWT + role; ALLOWED_ORIGINS default; guard seed script; extra PII encryption + per-user rate limits."
     status: pending

@@ -9,6 +9,7 @@ from app.models.message import Message
 from app.models.audit_log import AuditLog
 from app.models.chat_history import ChatHistory
 from app.models.contact import ContactInquiry
+from app.models.tenant_document import TenantDocument
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "AuditLog",
     "ChatHistory",
     "ContactInquiry",
+    "TenantDocument",
 ]

@@ -13,7 +13,7 @@ todos:
     status: completed
   - id: pr4_tenant_dashboard_sse
     content: "PR 4: Live tenant dashboard — Applications + SSE /api/applications/stream for instant approval updates, Payments, Maintenance submit, Documents, Messages."
-    status: in_progress
+    status: completed
   - id: pr5_auth_scoping
     content: "PR 5: Fix every scoping bug in applications/payments/maintenance routers; HttpOnly cookie for access_token; frontend middleware validates JWT + role; ALLOWED_ORIGINS default; guard seed script; extra PII encryption + per-user rate limits."
     status: pending

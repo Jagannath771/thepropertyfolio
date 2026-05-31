@@ -38,6 +38,36 @@ export async function listApplications(): Promise<Application[]> {
   });
 }
 
+export interface SubmitApplicationInput {
+  property_id: string;
+  personal_info?: Record<string, unknown> | null;
+  employment_info?: Record<string, unknown> | null;
+  rental_history?: unknown[] | null;
+  references?: unknown[] | null;
+  document_urls?: string[];
+  e_signature?: string | null;
+  background_check_consent?: boolean;
+}
+
+/**
+ * Submit a rental application.  Most fields are optional on the backend, so
+ * a "quick apply" only needs the property_id; the full intake form can come
+ * later from the tenant dashboard.
+ */
+export async function submitApplication(
+  input: SubmitApplicationInput,
+): Promise<Application> {
+  return apiFetch<Application>(`/api/applications`, {
+    method: "POST",
+    headers: { ...authHeader(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      document_urls: [],
+      background_check_consent: false,
+      ...input,
+    }),
+  });
+}
+
 /**
  * Absolute URL for `EventSource` (cannot send Authorization header).
  * Returns null if the user is not signed in on this device.

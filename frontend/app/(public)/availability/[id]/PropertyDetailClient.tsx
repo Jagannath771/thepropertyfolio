@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   MapPin,
@@ -13,9 +15,13 @@ import {
   CheckCircle,
   Calendar,
   Shield,
+  Loader2,
 } from "lucide-react";
 
 import type { Property } from "@/lib/types";
+import { getAccessToken } from "@/lib/auth-client";
+import { submitApplication } from "@/lib/applications";
+import { ApiError } from "@/lib/api";
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 675'><rect width='1200' height='675' fill='%23111827'/><text x='50%' y='50%' fill='%236B7280' font-family='sans-serif' font-size='24' text-anchor='middle' dominant-baseline='middle'>No photo yet</text></svg>";
@@ -56,6 +62,50 @@ export default function PropertyDetailClient({ property }: { property: Property 
   const router = useRouter();
   const heroImage = property.images[0] ?? FALLBACK_IMAGE;
   const secondImage = property.images[1];
+  const [applying, setApplying] = useState(false);
+
+  const handleApply = async () => {
+    if (applying) return;
+    // Not signed in -> send to login, remembering where to return.  We
+    // deliberately route to /tenants/login (not /tenants/register) so
+    // existing tenants don't get sent to a signup screen.
+    if (!getAccessToken()) {
+      const next = encodeURIComponent(`/availability/${property.id}`);
+      router.push(`/tenants/login?next=${next}&apply=1`);
+      return;
+    }
+    setApplying(true);
+    try {
+      await submitApplication({ property_id: property.id });
+      toast.success("Application submitted", {
+        description: "We'll notify you as soon as the owner reviews it.",
+      });
+      router.push("/tenants/dashboard");
+    } catch (err) {
+      const e = err as ApiError | Error;
+      const status = (e as ApiError).status;
+      if (status === 401 || status === 403) {
+        // Token expired, wrong role, or unverified email.  Bounce to login
+        // so they can re-auth and try again.
+        const next = encodeURIComponent(`/availability/${property.id}`);
+        router.push(`/tenants/login?next=${next}&apply=1`);
+        return;
+      }
+      if (status === 409) {
+        toast.info("You already applied for this property.", {
+          description: "Check your dashboard for the current status.",
+          action: {
+            label: "View",
+            onClick: () => router.push("/tenants/dashboard"),
+          },
+        });
+        return;
+      }
+      toast.error(e.message || "Could not submit application.");
+    } finally {
+      setApplying(false);
+    }
+  };
 
   return (
     <div className="min-h-screen pt-20 pb-24">
@@ -198,12 +248,23 @@ export default function PropertyDetailClient({ property }: { property: Property 
                 )}
               </div>
 
-              <Link
-                href={`/tenants/register?property=${property.id}`}
-                className="btn-primary w-full justify-center py-3 mb-3"
+              <button
+                type="button"
+                onClick={handleApply}
+                disabled={applying || property.status === "leased"}
+                className="btn-primary w-full justify-center py-3 mb-3 disabled:opacity-60 disabled:cursor-not-allowed"
+                data-testid="apply-now"
               >
-                Apply Now
-              </Link>
+                {applying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Submitting…
+                  </>
+                ) : property.status === "leased" ? (
+                  "Currently Leased"
+                ) : (
+                  "Apply Now"
+                )}
+              </button>
               <button className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-medium text-foreground-secondary hover:bg-white/5 transition-colors border border-white/10">
                 <Heart className="w-4 h-4" /> Save Property
               </button>

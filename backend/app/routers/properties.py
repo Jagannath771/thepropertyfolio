@@ -199,10 +199,14 @@ async def get_property(
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found.")
 
+    # Serialize BEFORE mutating the row.  Bumping `view_count` and flushing
+    # expires `updated_at` (it has `onupdate=func.now()`); accessing it again
+    # in the dict comprehension would trigger an implicit lazy-reload that
+    # blows up on the async session with `MissingGreenlet`.
+    data = _property_to_dict(prop)
     prop.view_count += 1
-    await db.flush()
-
-    return _property_to_dict(prop)
+    data["view_count"] = prop.view_count
+    return data
 
 
 # ── POST /api/properties ──────────────────────────────────────────────────────

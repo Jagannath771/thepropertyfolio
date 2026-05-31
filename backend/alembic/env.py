@@ -23,8 +23,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set SQLAlchemy URL from our settings (overrides alembic.ini)
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("+asyncpg", "+asyncpg"))
+# Set SQLAlchemy URL from our settings (overrides alembic.ini).
+# ConfigParser uses % for interpolation, so any percent-encoded characters in the
+# password (e.g. %40 for @, %24 for $) must be doubled to %% to survive the round-trip.
+_db_url = settings.DATABASE_URL.replace("%", "%%")
+config.set_main_option("sqlalchemy.url", _db_url)
 
 target_metadata = Base.metadata
 

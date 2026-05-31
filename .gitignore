@@ -41,6 +41,10 @@ MANIFEST
 .Python
 lib/
 lib64/
+# The Python venv rules above would also swallow frontend/lib/ — keep the
+# frontend source tree tracked.
+!frontend/lib/
+!frontend/lib/**
 .installed.cfg
 *.spec
 pip-log.txt

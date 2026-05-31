@@ -1,7 +1,22 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, Page } from "@playwright/test";
+
+import { FIXTURE_LIST_RESPONSE } from "./fixtures/properties";
+
+async function stubFeatured(page: Page) {
+  await page.route("**/api/properties*", async (route) => {
+    const url = route.request().url();
+    if (/\/api\/properties\/[^?]+(?:\?|$)/.test(url)) return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(FIXTURE_LIST_RESPONSE),
+    });
+  });
+}
 
 test.describe("Home Page", () => {
   test.beforeEach(async ({ page }) => {
+    await stubFeatured(page);
     await page.goto("/");
   });
 
@@ -27,10 +42,15 @@ test.describe("Home Page", () => {
     await expect(cta).toHaveAttribute("href", "/availability");
   });
 
-  test("services grid shows 6 cards", async ({ page }) => {
+  test("services grid shows cards", async ({ page }) => {
     await page.waitForSelector("text=Everything You Need");
     await expect(page.getByRole("heading", { name: "Property Listings" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Tenant Screening" })).toBeVisible();
+  });
+
+  test("featured properties section renders live cards from API", async ({ page }) => {
+    await expect(page.getByTestId("featured-properties")).toBeVisible();
+    await expect(page.getByTestId("featured-property-card").first()).toBeVisible();
   });
 
   test("chatbot bubble is visible", async ({ page }) => {
@@ -43,7 +63,7 @@ test.describe("Home Page", () => {
     await expect(page.locator("text=TPF Assistant")).toBeVisible();
   });
 
-  test("footer has newsletter form", async ({ page }) => {
+  test("footer is visible", async ({ page }) => {
     await page.locator("footer").scrollIntoViewIfNeeded();
     await expect(page.locator("footer")).toBeVisible();
   });

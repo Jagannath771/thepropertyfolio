@@ -2,21 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import uuid
 from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.middleware.auth_middleware import get_current_verified_user, require_tenant, require_owner
+from app.middleware.auth_middleware import (
+    get_current_verified_user,
+    get_current_verified_user_sse,
+    require_owner,
+    require_tenant,
+)
 from app.models.application import Application
 from app.models.property import Property
 from app.models.user import User
-from app.services import audit_service, email_service
+from app.services import application_events, audit_service, email_service
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -150,6 +158,38 @@ async def list_applications(
     return [_app_to_dict(a) for a in result.scalars().all()]
 
 
+@router.get("/stream")
+async def stream_application_updates(
+    current_user: Annotated[User, Depends(get_current_verified_user_sse)],
+) -> StreamingResponse:
+    """SSE stream of application updates for the current tenant (EventSource cannot send Bearer)."""
+    if current_user.role != "tenant":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access required.")
+    tenant_id = current_user.id
+
+    async def event_gen() -> Any:
+        queue = await application_events.subscribe(tenant_id)
+        try:
+            while True:
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            await application_events.unsubscribe(tenant_id, queue)
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/{application_id}")
 async def get_application(
     application_id: uuid.UUID,
@@ -209,4 +249,7 @@ async def update_application_status(
         resource_id=app.id,
     )
 
-    return _app_to_dict(app)
+    payload = _app_to_dict(app)
+    application_events.publish_application_update(app.tenant_id, payload)
+
+    return payload

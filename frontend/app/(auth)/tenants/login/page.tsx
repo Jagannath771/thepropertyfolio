@@ -2,10 +2,29 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, LogIn, AlertCircle } from "lucide-react";
 
+/**
+ * Whitelist what `?next=` paths we'll trust as a post-login redirect.  We
+ * never want an attacker to be able to bounce a freshly-authenticated user
+ * to an off-site URL or to a protected page they're not entitled to.
+ */
+function safeNextPath(raw: string | null): string {
+  if (!raw) return "/tenants/dashboard";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/tenants/dashboard";
+  const allowedPrefixes = ["/availability", "/tenants/dashboard"];
+  if (!allowedPrefixes.some((p) => raw === p || raw.startsWith(`${p}/`) || raw.startsWith(`${p}?`))) {
+    return "/tenants/dashboard";
+  }
+  return raw;
+}
+
 export default function TenantLoginPage() {
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next"));
+  const fromApply = searchParams.get("apply") === "1";
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +46,7 @@ export default function TenantLoginPage() {
       localStorage.setItem("access_token", data.access_token);
       localStorage.setItem("refresh_token", data.refresh_token);
       document.cookie = `access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
-      window.location.href = "/tenants/dashboard";
+      window.location.href = nextPath;
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -54,7 +73,11 @@ export default function TenantLoginPage() {
               <LogIn className="w-7 h-7 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "var(--font-playfair)" }}>Tenant Sign In</h1>
-            <p className="text-sm text-foreground-muted mt-2">Access your portal, pay rent, and more</p>
+            <p className="text-sm text-foreground-muted mt-2">
+              {fromApply
+                ? "Sign in to finish applying — we'll take you back to the listing."
+                : "Access your portal, pay rent, and more"}
+            </p>
           </div>
 
           {error && (
@@ -108,7 +131,16 @@ export default function TenantLoginPage() {
 
           <div className="mt-6 text-center text-sm text-foreground-muted">
             Don&apos;t have an account?{" "}
-            <Link href="/tenants/register" className="text-primary hover:underline font-medium">Create one free</Link>
+            <Link
+              href={
+                nextPath !== "/tenants/dashboard"
+                  ? `/tenants/register?next=${encodeURIComponent(nextPath)}${fromApply ? "&apply=1" : ""}`
+                  : "/tenants/register"
+              }
+              className="text-primary hover:underline font-medium"
+            >
+              Create one free
+            </Link>
           </div>
 
           <div className="mt-4 text-center">

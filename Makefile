@@ -82,8 +82,9 @@ migrate-down:
 	docker compose exec backend alembic downgrade -1
 
 seed:
-	docker compose exec backend python -m app.scripts.seed
-	@echo "$(GREEN)✅ Database seeded with sample data$(RESET)"
+	@echo "$(BOLD)Seeding is disabled in production mode.$(RESET)"
+	@echo "Add listings manually via the Owner dashboard at http://localhost:3000/owners/dashboard"
+	@echo "$(CYAN)If you still need dev seed data, run: docker compose exec backend python -m app.scripts.seed$(RESET)"
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 test: test-unit test-api test-e2e test-robot

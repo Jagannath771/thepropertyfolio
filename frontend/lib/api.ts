@@ -5,8 +5,12 @@
  * Works in both server components (via direct fetch) and client components.
  */
 
+// Server components run inside Docker and must reach the backend via the
+// service name.  Browser bundles get NEXT_PUBLIC_API_URL (localhost:8000).
 export const API_BASE_URL: string =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  process.env.API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000";
 
 export class ApiError extends Error {
   status: number;

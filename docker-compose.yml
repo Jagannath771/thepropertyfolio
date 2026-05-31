@@ -105,7 +105,10 @@ services:
       - .env
     environment:
       NEXTAUTH_URL: http://localhost:3000
+      # Browser-side JS uses localhost (user's machine has port 8000 mapped)
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Server-side SSR fetches must use the Docker service name, not localhost
+      API_URL: http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
